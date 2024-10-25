@@ -12,7 +12,7 @@ from torch_geometric.data import Data, Dataset, InMemoryDataset, DataLoader
 from parameter_setting import *
 
 
-def data_preparation_protein_all(pseq_path, task):
+def data_preparation_protein_all(pseq_path):
     print('protein data preparation....')
     with open(pseq_path) as f2:
         protein_info = f2.readlines()
@@ -33,7 +33,7 @@ def data_preparation_protein_all(pseq_path, task):
     for i in trange(idx.shape[0]):
         pro_name = protein_info[int(idx[i]), 0]
         pro_seq = protein_info[int(idx[i]), 1][:Protein_Max_Length]
-        point_data = np.loadtxt('dataset/' + task + '/protein_point_dim/' + pro_name + '.txt', max_rows=Protein_Max_Length)
+        point_data = np.loadtxt(point_path + pro_name + '.txt', max_rows=Protein_Max_Length)
         point_seq = np.zeros((len(pro_seq), 13))
         for seq_index in range(len(pro_seq)):
             point_seq[seq_index] = vec_dict[pro_seq[seq_index]]
@@ -90,7 +90,7 @@ class GNN_DATA:
             if line[p1_index] not in self.protein_name.keys():
                 self.protein_name[line[p1_index]] = name
                 name += 1
-            
+
             if line[p2_index] not in self.protein_name.keys():
                 self.protein_name[line[p2_index]] = name
                 name += 1
@@ -113,7 +113,7 @@ class GNN_DATA:
                 temp_label = self.ppi_label_list[index]
                 temp_label[class_map[line[label_index]]] = 1
                 self.ppi_label_list[index] = temp_label
-        
+
         if bigger_ppi_path != None:
             skip_head = True
             for line in tqdm(open(bigger_ppi_path)):
@@ -125,17 +125,17 @@ class GNN_DATA:
                 if line[p1_index] not in self.protein_name.keys():
                     self.protein_name[line[p1_index]] = name
                     name += 1
-                
+
                 if line[p2_index] not in self.protein_name.keys():
                     self.protein_name[line[p2_index]] = name
                     name += 1
-                
+
                 temp_data = ""
                 if line[p1_index] < line[p2_index]:
                     temp_data = line[p1_index] + "__" + line[p2_index]
                 else:
                     temp_data = line[p2_index] + "__" + line[p1_index]
-                
+
                 if temp_data not in self.ppi_dict.keys():
                     self.ppi_dict[temp_data] = ppi_name
                     temp_label = [0, 0, 0, 0, 0, 0, 0]
@@ -149,7 +149,7 @@ class GNN_DATA:
                     self.ppi_label_list[index] = temp_label
 
         i = 0
-        for ppi in tqdm(self.ppi_dict.keys()):  # 作用就是将结合起来的名称再切成列表
+        for ppi in tqdm(self.ppi_dict.keys()):
             name = self.ppi_dict[ppi]
             assert name == i
             i += 1
@@ -179,9 +179,9 @@ class GNN_DATA:
         self.node_num = len(self.protein_name)
         self.edge_num = len(self.ppi_list)
 
-    def get_feature_origin(self, pseq_path, task):
+    def get_feature_origin(self, pseq_path):
         self.pvec_dict = {}
-        self.pvec_dict = data_preparation_protein_all(pseq_path, task)
+        self.pvec_dict = data_preparation_protein_all(pseq_path)
 
         self.protein_dict = {}
         for name in tqdm(self.protein_name.keys()):
@@ -216,7 +216,7 @@ class GNN_DATA:
         self.x = torch.tensor(self.x, dtype=torch.float)
 
         self.data = Data(x=self.x, edge_index=self.edge_index.T, edge_attr_1=self.edge_attr)
-    
+
     def split_dataset(self, train_valid_index_path, test_size=0.2, random_new=False, mode='random'):
         if random_new:
             if mode == 'random':
@@ -246,7 +246,7 @@ class GNN_DATA:
                     if edge[1] not in node_to_edge_index.keys():
                         node_to_edge_index[edge[1]] = []
                     node_to_edge_index[edge[1]].append(i)
-                
+
                 node_num = len(node_to_edge_index)
 
                 sub_graph_size = int(edge_num * test_size)
@@ -254,7 +254,7 @@ class GNN_DATA:
                     selected_edge_index = get_bfs_sub_graph(self.ppi_list, node_num, node_to_edge_index, sub_graph_size)
                 elif mode == 'dfs':
                     selected_edge_index = get_dfs_sub_graph(self.ppi_list, node_num, node_to_edge_index, sub_graph_size)
-                
+
                 all_edge_index = [i for i in range(edge_num)]
 
                 unselected_edge_index = list(set(all_edge_index).difference(set(selected_edge_index)))
@@ -269,7 +269,7 @@ class GNN_DATA:
                 with open(train_valid_index_path, 'w') as f:
                     f.write(jsobj)
                     f.close()
-            
+
             else:
                 print("your mode is {}, you should use bfs, dfs or random".format(mode))
                 return
@@ -277,4 +277,3 @@ class GNN_DATA:
             with open(train_valid_index_path, 'r') as f:
                 self.ppi_split_dict = json.load(f)
                 f.close()
-    

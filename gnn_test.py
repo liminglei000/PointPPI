@@ -77,7 +77,7 @@ def main():
 
     ppi_data = GNN_DATA(ppi_path=args.ppi_path)
 
-    ppi_data.get_feature_origin(pseq_path=args.pseq_path, task=task)
+    ppi_data.get_feature_origin(pseq_path=args.pseq_path)
 
     ppi_data.generate_data()
 
@@ -91,7 +91,7 @@ def main():
     truth_edge_num = len(ppi_list) // 2
     # fake_edge_num = len(ppi_data.fake_edge) // 2
     fake_edge_num = 0
-    
+
     with open(args.index_path, 'r') as f:
         index_dict = json.load(f)
         f.close()
@@ -115,7 +115,7 @@ def main():
             node_vision_dict[ppi[0]] = 0
         if ppi[1] not in node_vision_dict.keys():
             node_vision_dict[ppi[1]] = 0
-    
+
     vision_num = 0
     unvision_num = 0
     for node in node_vision_dict:

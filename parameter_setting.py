@@ -20,7 +20,7 @@ graph_only_train = "False"
 batch_size = 1024
 epochs = 500
 learning_rate = 0.001
-Protein_Max_Length = 64
+Protein_Max_Length = 1024
 
 description = task + "_" + split_mode
 
@@ -30,3 +30,4 @@ train_valid_index_path = "dataset_split/" + task + "_split/" + split_mode + ".tx
 use_lr_scheduler = "True"
 save_path = "save_model/"
 vec_path = "dataset/" + task + "/vec5_CTC.txt"
+point_path = "dataset/" + task + "/protein_point_dim/"

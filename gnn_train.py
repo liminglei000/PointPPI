@@ -203,7 +203,7 @@ def main():
     ppi_data = GNN_DATA(ppi_path=args.ppi_path)
 
     print("use_get_feature_origin")
-    ppi_data.get_feature_origin(pseq_path=args.pseq_path, task=task)
+    ppi_data.get_feature_origin(pseq_path=args.pseq_path)
 
     ppi_data.generate_data()
 
