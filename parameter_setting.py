@@ -15,8 +15,6 @@ split_new = "False"
 graph_only_train = "False"
 # graph_only_train = "True"
 
-# alpha = 0
-# threshold = 1.1
 batch_size = 1024
 epochs = 500
 learning_rate = 0.001

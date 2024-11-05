@@ -108,8 +108,8 @@ class get_model(nn.Module):
         super(get_model, self).__init__()
         in_channel = 16 if normal_channel else 3
         self.normal_channel = normal_channel
-        self.sa1 = PointNetSetAbstraction(npoint=32, nsample=32, in_channel=in_channel, mlp=[32, 32, 64], group_all=False)
-        self.sa3 = PointNetSetAbstraction(npoint=None, nsample=None, in_channel=64 + 3, mlp=[64, 64, Protein_Max_Length], group_all=True)
+        self.sa1 = PointNetSetAbstraction(npoint=32, nsample=32, in_channel=in_channel, mlp=[64, 64, 128], group_all=False)
+        self.sa3 = PointNetSetAbstraction(npoint=None, nsample=None, in_channel=128 + 3, mlp=[128, 128, Protein_Max_Length], group_all=True)
         self.fc1 = nn.Linear(Protein_Max_Length, 256)
         self.bn1 = nn.BatchNorm1d(256)
         self.drop1 = nn.Dropout(0.4)

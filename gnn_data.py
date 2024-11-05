@@ -167,7 +167,6 @@ class GNN_DATA:
             self.ppi_list[i][0] = self.protein_name[seq1_name]
             self.ppi_list[i][1] = self.protein_name[seq2_name]
 
-        graph_undirection = False
         if graph_undirection:
             for i in tqdm(range(ppi_num)):
                 temp_ppi = self.ppi_list[i][::-1]
