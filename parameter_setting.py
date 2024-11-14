@@ -24,7 +24,7 @@ description = task + "_" + split_mode
 
 ppi_path = "dataset/" + task + "/protein.actions." + task + ".STRING.txt"
 pseq_path = "dataset/" + task + "/protein." + task + ".sequences.dictionary.tsv"
-train_valid_index_path = "dataset_split/" + task + "_split/" + split_mode + ".txt"
+train_valid_index_path = "dataset_split1/" + task + "_split/" + split_mode + ".txt"
 use_lr_scheduler = "True"
 save_path = "save_model/"
 vec_path = "dataset/" + task + "/vec5_CTC.txt"
