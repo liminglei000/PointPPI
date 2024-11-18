@@ -1,9 +1,9 @@
 import mindspore
 import mindspore.nn as nn
 import mindspore.ops as ops
-import mindspore.numpy as mnp
-
+from mindspore import Tensor
 from parameter_setting import *
+
 
 def index_points(points, idx):
     B = points.shape[0]
@@ -11,40 +11,41 @@ def index_points(points, idx):
     view_shape[1:] = [1] * (len(view_shape) - 1)
     repeat_shape = list(idx.shape)
     repeat_shape[0] = 1
-    batch_indices = ops.arange(B).view(view_shape).repeat(repeat_shape)
-    new_points = ops.gather_elements(points, 1, mnp.expand_dims(batch_indices, -1).repeat(points.shape[-1], -1))
+    batch_indices = ops.broadcast_to(ops.arange(B).view(view_shape), repeat_shape)
+    new_points = points[batch_indices, idx, :]
     return new_points
+
 
 def uniform_center_sample(sequence, npoint):
     B, N, C = sequence.shape
-    all_indices = []
-    for b in range(B):
-        non_zero_mask = ops.any(sequence[b] != 0, axis=-1)
-        valid_length = ops.reduce_sum(non_zero_mask).asnumpy().item()
-        step = max(valid_length // npoint, 1)
-        indices = ops.arange(0, valid_length, step)
-        if len(indices) < npoint:
-            indices = ops.concat([indices, ops.zeros((npoint - len(indices),), dtype=indices.dtype)])
+    step = max(N // npoint, 1)
+    indices = ops.arange(0, N, step)
+    if indices.shape[0] > npoint:
         indices = indices[:npoint]
-        all_indices.append(indices)
-    return ops.stack(all_indices, axis=0)
+    elif indices.shape[0] < npoint:
+        indices = ops.concat([indices, ops.tile(indices[-1:], (npoint - indices.shape[0],))])
+    indices = indices.expand_dims(0).tile((B, 1))
+    return indices
+
 
 def fixed_neighborhood_points(center_indices, sequence, n_neighborhood):
     B, N, C = sequence.shape
     half_window = n_neighborhood // 2
 
-    center_indices = ops.clip_by_value(center_indices, half_window, N - half_window - 1)
+    center_indices = ops.maximum(center_indices, half_window)
+    center_indices = ops.minimum(center_indices, N - half_window - 1)
     offsets = ops.arange(-half_window, half_window).expand_dims(0)
 
     neighbor_indices = center_indices.expand_dims(-1) + offsets
     neighbor_indices = ops.clip_by_value(neighbor_indices, 0, N - 1)
     return neighbor_indices
 
+
 def sample_and_group_uniform(npoint, n_neighborhood, xyz, points):
     B, N, C = xyz.shape
-    center_idx = uniform_center_sample(xyz, npoint)
+    center_idx = uniform_center_sample(xyz, npoint)  # 使用均匀采样替代 `farthest_point_sample`
     new_xyz = index_points(xyz, center_idx)
-    idx = fixed_neighborhood_points(center_idx, xyz, n_neighborhood)
+    idx = fixed_neighborhood_points(center_idx, xyz, n_neighborhood)  # 替代 `query_ball_point`
     grouped_xyz = index_points(xyz, idx)
     grouped_xyz_norm = grouped_xyz - new_xyz.view(B, npoint, 1, C)
 
@@ -53,7 +54,9 @@ def sample_and_group_uniform(npoint, n_neighborhood, xyz, points):
         new_points = ops.concat([grouped_xyz_norm, grouped_points], axis=-1)
     else:
         new_points = grouped_xyz_norm
+
     return new_xyz, new_points
+
 
 def sample_and_group_all(xyz, points):
     B, N, C = xyz.shape
@@ -65,6 +68,7 @@ def sample_and_group_all(xyz, points):
         new_points = grouped_xyz
     return new_xyz, new_points
 
+
 class PointNetSetAbstraction(nn.Cell):
     def __init__(self, npoint, nsample, in_channel, mlp, group_all):
         super(PointNetSetAbstraction, self).__init__()
@@ -74,7 +78,7 @@ class PointNetSetAbstraction(nn.Cell):
         self.mlp_bns = nn.CellList()
         last_channel = in_channel
         for out_channel in mlp:
-            self.mlp_convs.append(nn.Conv2d(last_channel, out_channel, 1))
+            self.mlp_convs.append(nn.Conv2d(last_channel, out_channel, kernel_size=1))
             self.mlp_bns.append(nn.BatchNorm2d(out_channel))
             last_channel = out_channel
         self.group_all = group_all
@@ -90,26 +94,28 @@ class PointNetSetAbstraction(nn.Cell):
             new_xyz, new_points = sample_and_group_uniform(self.npoint, self.nsample, xyz, points)
         new_points = ops.transpose(new_points, (0, 3, 2, 1))  # [B, C+D, nsample, npoint]
 
-        for i, conv in enumerate(self.mlp_convs):
+        for i in range(len(self.mlp_convs)):
+            conv = self.mlp_convs[i]
             bn = self.mlp_bns[i]
             new_points = ops.relu(bn(conv(new_points)))
-        new_points = ops.reduce_max(new_points, 2)
+        new_points = ops.ReduceMax(keep_dims=False)(new_points, 2)
         new_xyz = ops.transpose(new_xyz, (0, 2, 1))
         return new_xyz, new_points
+
 
 class get_model(nn.Cell):
     def __init__(self, num_class=256, normal_channel=True):
         super(get_model, self).__init__()
         in_channel = 16 if normal_channel else 3
         self.normal_channel = normal_channel
-        self.sa1 = PointNetSetAbstraction(npoint=32, nsample=32, in_channel=in_channel, mlp=[32, 32, 64], group_all=False)
-        self.sa3 = PointNetSetAbstraction(npoint=None, nsample=None, in_channel=64 + 3, mlp=[64, 64, Protein_Max_Length], group_all=True)
+        self.sa1 = PointNetSetAbstraction(npoint=32, nsample=32, in_channel=in_channel, mlp=[64, 64, 128], group_all=False)
+        self.sa3 = PointNetSetAbstraction(npoint=None, nsample=None, in_channel=128 + 3, mlp=[128, 128, Protein_Max_Length], group_all=True)
         self.fc1 = nn.Dense(Protein_Max_Length, 256)
         self.bn1 = nn.BatchNorm1d(256)
-        self.drop1 = nn.Dropout(keep_prob=0.6)
+        self.drop1 = nn.Dropout(p=0.4)
         self.fc2 = nn.Dense(256, 256)
         self.bn2 = nn.BatchNorm1d(256)
-        self.drop2 = nn.Dropout(keep_prob=0.6)
+        self.drop2 = nn.Dropout(p=0.4)
         self.fc3 = nn.Dense(256, num_class)
 
     def construct(self, xyz):
