@@ -1,37 +1,42 @@
 import os
 
 
-def run_func(description, ppi_path, pseq_path, vec_path,
-            index_path, gnn_model, test_all):
+def run_func(description, ppi_path, pseq_path, vec_path, point_path, protein_max_length, index_path, gnn_model, test_all):
     os.system("python gnn_test.py \
             --description={} \
             --ppi_path={} \
             --pseq_path={} \
             --vec_path={} \
+            --point_path={} \
+            --protein_max_length={} \
             --index_path={} \
             --gnn_model={} \
             --test_all={} \
-            ".format(description, ppi_path, pseq_path, vec_path, 
-                    index_path, gnn_model, test_all))
+            ".format(description, ppi_path, pseq_path, vec_path, point_path, protein_max_length, index_path, gnn_model, test_all))
+
 
 if __name__ == "__main__":
     description = "test"
-
     task = 'SHS27K'
     # task = 'STRING'
 
-    mode = 'random'
-    # mode = 'bfs'
-    # mode = 'dfs'
+    # split_mode = "random"
+    # split_mode = "bfs"
+    split_mode = "dfs"
 
-    ppi_path = "../dataset/" + task + "/protein.actions." + task + ".STRING.txt"
-    pseq_path = "../dataset/" + task + "/protein." + task + ".sequences.dictionary.tsv"
-    vec_path = "../dataset/" + task + "/vec5_CTC.txt"
+    # gnn_model = "save_model/SHS27k_random_11-19-01-45-56/gnn_model_train.ckpt"
+    # gnn_model = "save_model/SHS27k_bfs_11-19-01-46-32/gnn_model_train.ckpt"
+    gnn_model = "save_model/SHS27k_dfs_11-19-16-08-53/gnn_model_train.ckpt"
 
-    index_path = "../dataset_split/" + task + "_split/" + mode + ".txt"
-    gnn_model = "save_model/SHS27k_random_25-08-43-08-43/gnn_model_train.ckpt"
+    ppi_path = "dataset/" + task + "/protein.actions." + task + ".STRING.txt"
+    pseq_path = "dataset/" + task + "/protein." + task + ".sequences.dictionary.tsv"
+    vec_path = "dataset/" + task + "/vec5_CTC.txt"
+    point_path = "dataset/" + task + "/protein_point_dim/"
+    index_path = "dataset_split/" + task + "_split/" + split_mode + ".txt"
+    protein_max_length = 1024
 
     test_all = "True"
     # test_all = "False"
 
-    run_func(description, ppi_path, pseq_path, vec_path, index_path, gnn_model, test_all)
+    # test test
+    run_func(description, ppi_path, pseq_path, vec_path, point_path, protein_max_length, index_path, gnn_model, test_all)

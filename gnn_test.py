@@ -14,7 +14,6 @@ from gnn_data import GNN_DATA
 from gnn_model import Graph_Net
 from utils import Metrictor_PPI, print_file
 
-from parameter_setting import *
 
 def boolean_string(s):
     if s not in {'False', 'True'}:
@@ -29,7 +28,11 @@ parser.add_argument('--ppi_path', default=None, type=str,
 parser.add_argument('--pseq_path', default=None, type=str,
                     help="protein sequence path")
 parser.add_argument('--vec_path', default=None, type=str,
-                    help='protein sequence vector path')
+                    help="protein sequence path")
+parser.add_argument('--point_path', default=None, type=str,
+                    help="protein point path")
+parser.add_argument('--protein_max_length', default=None, type=int,
+                    help="protein max length")
 parser.add_argument('--index_path', default=None, type=str,
                     help='cnn_rnn and gnn unified train and valid ppi index')
 parser.add_argument('--gnn_model', default=None, type=str,
@@ -43,7 +46,7 @@ def test(model, graph, test_mask, device):
 
     model.eval()
 
-    batch_size = 256
+    batch_size = 2048
 
     valid_steps = math.ceil(len(test_mask) / batch_size)
 
@@ -53,9 +56,10 @@ def test(model, graph, test_mask, device):
         else:
             valid_edge_id = test_mask[step*batch_size : step*batch_size + batch_size]
 
-        output = model(graph.x, graph.edge_index, valid_edge_id)
+        output, _, _, _, _ = model(graph.x, graph.edge_index, valid_edge_id)
         label = graph.edge_attr_1[valid_edge_id]
         label = label.type(torch.FloatTensor).to(device)
+
         m = nn.Sigmoid()
         pre_result = (m(output) > 0.5).type(torch.FloatTensor).to(device)
 
@@ -77,7 +81,7 @@ def main():
 
     ppi_data = GNN_DATA(ppi_path=args.ppi_path)
 
-    ppi_data.get_feature_origin(pseq_path=args.pseq_path)
+    ppi_data.get_feature_origin(pseq_path=args.pseq_path, vec_path=args.vec_path, point_path=args.point_path, protein_max_length=args.protein_max_length)
 
     ppi_data.generate_data()
 
@@ -144,6 +148,7 @@ def main():
     graph.test2_mask = test2_mask
     graph.test3_mask = test3_mask
 
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = Graph_Net().to(device)
     model.load_state_dict(torch.load(args.gnn_model)['state_dict'])
 

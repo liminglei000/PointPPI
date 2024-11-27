@@ -21,6 +21,16 @@ torch.manual_seed(1)
 torch.cuda.manual_seed(1)
 
 
+def process_similarity(x1, x2, dim=1, small_threshold=1e-2):
+    similarity_now = F.cosine_similarity(x1, x2, dim=1)
+    norm_x1 = torch.norm(x1, dim=dim)
+    norm_x2 = torch.norm(x2, dim=dim)
+    small_mask_x1 = norm_x1 < small_threshold
+    small_mask_x2 = norm_x2 < small_threshold
+    similarity_now[small_mask_x1 | small_mask_x2] = 0
+    return similarity_now
+
+
 def boolean_string(s):
     if s not in {'False', 'True'}:
         raise ValueError('Not a valid boolean string')
@@ -34,6 +44,12 @@ parser.add_argument('--ppi_path', default=ppi_path, type=str,
                     help="ppi path")
 parser.add_argument('--pseq_path', default=pseq_path, type=str,
                     help="protein sequence path")
+parser.add_argument('--vec_path', default=vec_path, type=str,
+                    help="protein sequence path")
+parser.add_argument('--point_path', default=point_path, type=str,
+                    help="protein point path")
+parser.add_argument('--protein_max_length', default=protein_max_length, type=int,
+                    help="protein max length")
 parser.add_argument('--split_new', default=split_new, type=boolean_string,
                     help='split new index file or not')
 parser.add_argument('--split_mode', default=split_mode, type=str,
@@ -50,6 +66,7 @@ parser.add_argument('--batch_size', default=batch_size, type=int,
                     help="gnn train batch size, edge batch size")
 parser.add_argument('--epochs', default=epochs, type=int,
                     help='train epoch number')
+
 
 def train(model, graph, ppi_list, loss_fn, optimizer, device,
           result_file_path, summary_writer, save_path,
@@ -78,25 +95,42 @@ def train(model, graph, ppi_list, loss_fn, optimizer, device,
 
         for step in range(steps):
             if step == steps - 1:
-                if got:  # false
+                if got:
                     train_edge_id = graph.train_mask_got[step * batch_size:]
                 else:
                     train_edge_id = graph.train_mask[step * batch_size:]
             else:
-                if got:  # false
+                if got:
                     train_edge_id = graph.train_mask_got[step * batch_size: step * batch_size + batch_size]
                 else:
                     train_edge_id = graph.train_mask[step * batch_size: step * batch_size + batch_size]
 
-            if got:  # false
-                output = model(graph.x, graph.edge_index_got, train_edge_id)
+            if got:
+                output, x1, x2, a, b = model(graph.x, graph.edge_index_got, train_edge_id)
                 label = graph.edge_attr_got[train_edge_id]
             else:
-                output = model(graph.x, graph.edge_index, train_edge_id)
+                output, x1, x2, a, b = model(graph.x, graph.edge_index, train_edge_id)
                 label = graph.edge_attr_1[train_edge_id]
 
             label = label.type(torch.FloatTensor).to(device)
-            loss = loss_fn(output, label)
+            if use_similarity:
+                if step == steps - 1:
+                    similarity_origin = np.zeros(len(graph.train_mask) - step * batch_size)
+                    for i in range(len(graph.train_mask) - step * batch_size):
+                        similarity_origin[i] = similarity_matrix[a[i], b[i]]
+                else:
+                    similarity_origin = np.zeros(batch_size)
+                    for i in range(batch_size):
+                        similarity_origin[i] = similarity_matrix[a[i], b[i]]
+                similarity_origin = torch.tensor(similarity_origin).to(device)
+
+                similarity_now = process_similarity(x1, x2)
+                similarity_now = torch.squeeze((similarity_now + 1) / 2)
+                loss_mse = ((similarity_now - similarity_origin)[similarity_origin >= 0.5] ** 2).mean()
+
+                loss = loss_fn(output, label) + alpha * loss_mse
+            else:
+                loss = loss_fn(output, label)
 
             optimizer.zero_grad()
             loss.backward()
@@ -114,20 +148,18 @@ def train(model, graph, ppi_list, loss_fn, optimizer, device,
             f1_sum += metrics.F1
             loss_sum += loss.item()
 
-            summary_writer.add_scalar('train/loss', loss.item(), global_step)
-            summary_writer.add_scalar('train/precision', metrics.Precision, global_step)
-            summary_writer.add_scalar('train/recall', metrics.Recall, global_step)
-            summary_writer.add_scalar('train/F1', metrics.F1, global_step)
-            summary_writer.add_scalar('train/auc', metrics.auc, global_step)
-            summary_writer.add_scalar('train/hmloss', metrics.hmloss, global_step)
-
-            global_step += 1
+            # summary_writer.add_scalar('train/loss', loss.item(), global_step)
+            # summary_writer.add_scalar('train/precision', metrics.Precision, global_step)
+            # summary_writer.add_scalar('train/recall', metrics.Recall, global_step)
+            # summary_writer.add_scalar('train/F1', metrics.F1, global_step)
+            # summary_writer.add_scalar('train/auc', metrics.auc, global_step)
+            # summary_writer.add_scalar('train/hmloss', metrics.hmloss, global_step)
+            #
+            # global_step += 1
             # print_file("epoch: {}, step: {}, Train: label_loss: {}, precision: {}, recall: {}, f1: {}, auc: {}, hmloss: {}"
             #             .format(epoch, step, loss.item(), metrics.Precision, metrics.Recall, metrics.F1, metrics.auc, metrics.hmloss))
 
-        torch.save({'epoch': epoch,
-                    'state_dict': model.state_dict()},
-                   os.path.join(save_path, 'gnn_model_train.ckpt'))
+        torch.save({'epoch': epoch, 'state_dict': model.state_dict()}, os.path.join(save_path, 'gnn_model_train.ckpt'))
 
         valid_pre_result_list = []
         valid_label_list = []
@@ -144,10 +176,28 @@ def train(model, graph, ppi_list, loss_fn, optimizer, device,
                 else:
                     valid_edge_id = graph.val_mask[step * batch_size: step * batch_size + batch_size]
 
-                output = model(graph.x, graph.edge_index, valid_edge_id)
+                output, x1, x2, a, b = model(graph.x, graph.edge_index, valid_edge_id)
                 label = graph.edge_attr_1[valid_edge_id]
                 label = label.type(torch.FloatTensor).to(device)
-                loss = loss_fn(output, label)
+
+                if use_similarity:
+                    if step == steps - 1:
+                        similarity_origin = np.zeros(len(graph.train_mask) - step * batch_size)
+                        for i in range(len(graph.train_mask) - step * batch_size):
+                            similarity_origin[i] = similarity_matrix[a[i], b[i]]
+                    else:
+                        similarity_origin = np.zeros(batch_size)
+                        for i in range(batch_size):
+                            similarity_origin[i] = similarity_matrix[a[i], b[i]]
+                    similarity_origin = torch.tensor(similarity_origin).to(device)
+
+                    similarity_now = process_similarity(x1, x2)
+                    similarity_now = torch.squeeze((similarity_now + 1) / 2)
+                    loss_mse = ((similarity_now - similarity_origin)[similarity_origin >= 0.5] ** 2).mean()
+
+                    loss = loss_fn(output, label) + alpha * loss_mse
+                else:
+                    loss = loss_fn(output, label)
 
                 valid_loss_sum += loss.item()
 
@@ -179,9 +229,7 @@ def train(model, graph, ppi_list, loss_fn, optimizer, device,
             global_best_valid_f1 = metrics.F1
             global_best_valid_f1_epoch = epoch
 
-            torch.save({'epoch': epoch,
-                        'state_dict': model.state_dict()},
-                       os.path.join(save_path, 'gnn_model_valid_best.ckpt'))
+            torch.save({'epoch': epoch, 'state_dict': model.state_dict()}, os.path.join(save_path, 'gnn_model_valid_best.ckpt'))
 
         summary_writer.add_scalar('valid/precision', metrics.Precision, global_step)
         summary_writer.add_scalar('valid/recall', metrics.Recall, global_step)
@@ -190,11 +238,8 @@ def train(model, graph, ppi_list, loss_fn, optimizer, device,
         summary_writer.add_scalar('valid/auc', metrics.auc, global_step)
         summary_writer.add_scalar('valid/hmloss', metrics.hmloss, global_step)
 
-        print_file(
-            "epoch: {}, Training_avg: label_loss: {}, recall: {}, precision: {}, F1: {}, Validation_avg: loss: {}, recall: {}, precision: {}, F1: {}, auc: {},hmloss: {}, Best valid_f1: {}, in {} epoch"
-            .format(epoch, loss, recall, precision, f1, valid_loss, metrics.Recall, metrics.Precision, metrics.F1,
-                    metrics.auc, metrics.hmloss, global_best_valid_f1, global_best_valid_f1_epoch),
-            save_file_path=result_file_path)
+        print_file("epoch: {}, Training: loss: {}, F1: {}, Valid: loss: {}, F1: {}, Auc:{}, hmloss: {}"
+                   .format(epoch, loss, f1, valid_loss, metrics.F1, metrics.auc, metrics.hmloss), save_file_path=result_file_path)
 
 
 def main():
@@ -203,7 +248,8 @@ def main():
     ppi_data = GNN_DATA(ppi_path=args.ppi_path)
 
     print("use_get_feature_origin")
-    ppi_data.get_feature_origin(pseq_path=args.pseq_path)
+    ppi_data.get_feature_origin(pseq_path=args.pseq_path, vec_path=args.vec_path,
+                                point_path=args.point_path, protein_max_length=args.protein_max_length)
 
     ppi_data.generate_data()
 
@@ -253,7 +299,7 @@ def main():
         for key in args_dict:
             f.write("{} = {}".format(key, args_dict[key]))
             f.write('\n')
-        f.write('max_length = {}'.format(Protein_Max_Length))
+        f.write('max_length = {}'.format(protein_max_length))
         f.write('\n')
         f.write("train gnn, train_num: {}, valid_num: {}".format(len(graph.train_mask), len(graph.val_mask)))
 

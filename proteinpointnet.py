@@ -13,6 +13,7 @@ def index_points(points, idx):
     repeat_shape = list(idx.shape)
     repeat_shape[0] = 1
     batch_indices = torch.arange(B, dtype=torch.long).to(device).view(view_shape).repeat(repeat_shape)
+    print(batch_indices.shape)
     new_points = points[batch_indices, idx, :]
     return new_points
 
@@ -69,6 +70,7 @@ def sample_and_group_uniform(npoint, n_neighborhood, xyz, points):
         new_points = torch.cat([grouped_xyz_norm, grouped_points], dim=-1)
     else:
         new_points = grouped_xyz_norm
+
     return new_xyz, new_points
 
 
@@ -123,8 +125,8 @@ class get_model(nn.Module):
         in_channel = 16 if normal_channel else 3
         self.normal_channel = normal_channel
         self.sa1 = PointNetSetAbstraction(npoint=32, nsample=32, in_channel=in_channel, mlp=[32, 32, 64], group_all=False)
-        self.sa3 = PointNetSetAbstraction(npoint=None, nsample=None, in_channel=64 + 3, mlp=[64, 64, Protein_Max_Length], group_all=True)
-        self.fc1 = nn.Linear(Protein_Max_Length, 256)
+        self.sa3 = PointNetSetAbstraction(npoint=None, nsample=None, in_channel=64 + 3, mlp=[64, 64, protein_max_length], group_all=True)
+        self.fc1 = nn.Linear(protein_max_length, 256)
         self.bn1 = nn.BatchNorm1d(256)
         self.drop1 = nn.Dropout(0.4)
         self.fc2 = nn.Linear(256, 256)
@@ -141,11 +143,10 @@ class get_model(nn.Module):
             norm = None
         l1_xyz, l1_points = self.sa1(xyz, norm)
         l3_xyz, l3_points = self.sa3(l1_xyz, l1_points)
-        x = l3_points.view(B, Protein_Max_Length)
+        x = l3_points.view(B, protein_max_length)
         x = self.drop1(F.relu(self.bn1(self.fc1(x))))
         x = self.drop2(F.relu(self.bn2(self.fc2(x))))
         x = self.fc3(x)
         # x = F.log_softmax(x, -1)
 
-        # return x, l3_points
         return x

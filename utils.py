@@ -11,10 +11,9 @@ def print_file(str_, save_file_path=None):
         f = open(save_file_path, 'a')
         print(str_, file=f)
 
+
 class Metrictor_PPI:
     def __init__(self, pre_y, truth_y, is_binary=False):
-        # print("pre_y",pre_y)
-        # print("truth_y",truth_y)
         self.TP = 0
         self.FP = 0
         self.TN = 0
@@ -63,6 +62,7 @@ class Metrictor_PPI:
             print_file("Precision: {}".format(self.Precision), file)
             print_file("Recall: {}".format(self.Recall), file)
             print_file("F1-Score: {}".format(self.F1), file)
+
 
 class UnionFindSet(object):
     def __init__(self, m):
@@ -130,6 +130,7 @@ def get_bfs_sub_graph(ppi_list, node_num, node_to_edge_index, sub_graph_size):
     node_list = candiate_node + selected_node
     # print(len(node_list), len(selected_edge_index))
     return selected_edge_index
+
 
 def get_dfs_sub_graph(ppi_list, node_num, node_to_edge_index, sub_graph_size):
     

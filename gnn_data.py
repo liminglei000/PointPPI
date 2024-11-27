@@ -9,10 +9,8 @@ from tqdm import *
 from utils import UnionFindSet, get_bfs_sub_graph, get_dfs_sub_graph
 from torch_geometric.data import Data, Dataset, InMemoryDataset, DataLoader
 
-from parameter_setting import *
 
-
-def data_preparation_protein_all(pseq_path):
+def data_preparation_protein_all(pseq_path, vec_path, point_path, protein_max_length):
     print('protein data preparation....')
     with open(pseq_path) as f2:
         protein_info = f2.readlines()
@@ -32,17 +30,17 @@ def data_preparation_protein_all(pseq_path):
     protein_info = np.loadtxt(pseq_path, delimiter='\t', dtype=str)
     for i in trange(idx.shape[0]):
         pro_name = protein_info[int(idx[i]), 0]
-        pro_seq = protein_info[int(idx[i]), 1][:Protein_Max_Length]
-        point_data = np.loadtxt(point_path + pro_name + '.txt', max_rows=Protein_Max_Length)
+        pro_seq = protein_info[int(idx[i]), 1][:protein_max_length]
+        point_data = np.loadtxt(point_path + pro_name + '.txt', max_rows=protein_max_length)
         point_seq = np.zeros((len(pro_seq), 13))
         for seq_index in range(len(pro_seq)):
             point_seq[seq_index] = vec_dict[pro_seq[seq_index]]
         point_data = np.hstack((point_data, point_seq))
 
-        if point_data.shape[0] >= Protein_Max_Length:
-            protein_point = point_data[:Protein_Max_Length, :16]
+        if point_data.shape[0] >= protein_max_length:
+            protein_point = point_data[:protein_max_length, :16]
         else:
-            protein_point = np.zeros((Protein_Max_Length, 16))
+            protein_point = np.zeros((protein_max_length, 16))
             protein_point[:point_data.shape[0], :] = point_data[:, :16]
 
         protein_dict[pro_name] = protein_point
@@ -178,9 +176,9 @@ class GNN_DATA:
         self.node_num = len(self.protein_name)
         self.edge_num = len(self.ppi_list)
 
-    def get_feature_origin(self, pseq_path):
+    def get_feature_origin(self, pseq_path, vec_path, point_path, protein_max_length):
         self.pvec_dict = {}
-        self.pvec_dict = data_preparation_protein_all(pseq_path)
+        self.pvec_dict = data_preparation_protein_all(pseq_path, vec_path, point_path, protein_max_length)
 
         self.protein_dict = {}
         for name in tqdm(self.protein_name.keys()):
