@@ -212,7 +212,7 @@ class GNN_DATA:
         self.x = np.array(self.x)
         self.x = torch.tensor(self.x, dtype=torch.float)
 
-        self.data = Data(x=self.x, edge_index=self.edge_index.T, edge_attr_1=self.edge_attr)
+        self.data = Data(x=self.x, edge_index=self.edge_index.T, edge_attr=self.edge_attr)
 
     def split_dataset(self, train_valid_index_path, test_size=0.2, random_new=False, mode='random'):
         if random_new:

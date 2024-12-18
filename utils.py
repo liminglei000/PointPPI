@@ -1,5 +1,3 @@
-import os
-import numpy as np
 import random
 from sklearn.metrics import hamming_loss
 from sklearn import metrics
@@ -19,6 +17,7 @@ class Metrictor_PPI:
         self.TN = 0
         self.FN = 0
         self.auc = metrics.roc_auc_score(truth_y, pre_y)
+        self.aupr = metrics.average_precision_score(truth_y, pre_y)
         self.hmloss =hamming_loss(truth_y,pre_y)
 
         if is_binary:

@@ -1,18 +1,13 @@
-import os
-import time
 import math
 import json
-import random
 import numpy as np
 import argparse
 import torch
 import torch.nn as nn
-
 from tqdm import tqdm
-
 from gnn_data import GNN_DATA
 from gnn_model import Graph_Net
-from utils import Metrictor_PPI, print_file
+from utils import Metrictor_PPI
 
 
 def boolean_string(s):
@@ -20,34 +15,27 @@ def boolean_string(s):
         raise ValueError('Not a valid boolean string')
     return s == 'True'
 
-parser = argparse.ArgumentParser(description='Test Model')
-parser.add_argument('--description', default=None, type=str,
-                    help='train description')
-parser.add_argument('--ppi_path', default=None, type=str,
-                    help="ppi path")
-parser.add_argument('--pseq_path', default=None, type=str,
-                    help="protein sequence path")
-parser.add_argument('--vec_path', default=None, type=str,
-                    help="protein sequence path")
-parser.add_argument('--point_path', default=None, type=str,
-                    help="protein point path")
-parser.add_argument('--protein_max_length', default=None, type=int,
-                    help="protein max length")
-parser.add_argument('--index_path', default=None, type=str,
-                    help='cnn_rnn and gnn unified train and valid ppi index')
-parser.add_argument('--gnn_model', default=None, type=str,
-                    help="gnn trained model")
-parser.add_argument('--test_all', default='False', type=boolean_string,
-                    help="test all or test separately")
 
-def test(model, graph, test_mask, device):
+def set_args():
+    parser = argparse.ArgumentParser(description='Test Model')
+    parser.add_argument('--ppi_path', default=None, type=str, help="ppi path")
+    parser.add_argument('--pseq_path', default=None, type=str, help="protein sequence path")
+    parser.add_argument('--vec_path', default=None, type=str, help="protein sequence path")
+    parser.add_argument('--point_path', default=None, type=str, help="protein point path")
+    parser.add_argument('--protein_max_length', default=None, type=int, help="protein max length")
+    parser.add_argument('--index_path', default=None, type=str, help='cnn_rnn and gnn unified train and valid ppi index')
+    parser.add_argument('--gnn_model', default=None, type=str, help="gnn trained model")
+    parser.add_argument('--test_all', default='False', type=boolean_string, help="test all or test separately")
+    return parser.parse_args()
+
+
+def test(model, graph, test_mask, device, gnn_model="./"):
+    valid_predict_list = []
     valid_pre_result_list = []
     valid_label_list = []
 
     model.eval()
-
     batch_size = 2048
-
     valid_steps = math.ceil(len(test_mask) / batch_size)
 
     for step in tqdm(range(valid_steps)):
@@ -56,53 +44,45 @@ def test(model, graph, test_mask, device):
         else:
             valid_edge_id = test_mask[step*batch_size : step*batch_size + batch_size]
 
-        output, _, _, _, _ = model(graph.x, graph.edge_index, valid_edge_id)
-        label = graph.edge_attr_1[valid_edge_id]
+        output, _ = model(graph.x, graph.edge_index, valid_edge_id)
+        label = graph.edge_attr[valid_edge_id]
         label = label.type(torch.FloatTensor).to(device)
 
         m = nn.Sigmoid()
         pre_result = (m(output) > 0.5).type(torch.FloatTensor).to(device)
 
+        valid_predict_list.append(m(output).cpu().data)
         valid_pre_result_list.append(pre_result.cpu().data)
         valid_label_list.append(label.cpu().data)
 
+    valid_predict_list = torch.cat(valid_predict_list, dim=0)
     valid_pre_result_list = torch.cat(valid_pre_result_list, dim=0)
     valid_label_list = torch.cat(valid_label_list, dim=0)
 
     metrics = Metrictor_PPI(valid_pre_result_list, valid_label_list)
-
     metrics.show_result()
+    print("F1:{:.4f}, Auc:{:.4f}, Aupr:{:.4f}, hmloss:{:.4f}".format(metrics.F1, metrics.auc, metrics.aupr, metrics.hmloss))
 
-    print("Recall: {}, Precision: {}, F1: {}, auc: {}, hmloss: {}".format(metrics.Recall, metrics.Precision, metrics.F1,metrics.auc,metrics.hmloss))
+    np.savetxt(gnn_model+"predict.txt", valid_predict_list, fmt="%.4f", delimiter=",")
+    np.savetxt(gnn_model+"label.txt", valid_label_list, fmt="%d", delimiter=",")
+
 
 def main():
-
-    args = parser.parse_args()
-
+    args = set_args()
     ppi_data = GNN_DATA(ppi_path=args.ppi_path)
-
     ppi_data.get_feature_origin(pseq_path=args.pseq_path, vec_path=args.vec_path, point_path=args.point_path, protein_max_length=args.protein_max_length)
-
     ppi_data.generate_data()
 
     graph = ppi_data.data
     temp = graph.edge_index.transpose(0, 1).numpy()
     ppi_list = []
-
-    for edge in temp:
-        ppi_list.append(list(edge))
-
-    truth_edge_num = len(ppi_list) // 2
-    # fake_edge_num = len(ppi_data.fake_edge) // 2
-    fake_edge_num = 0
+    for edge in temp: ppi_list.append(list(edge))
 
     with open(args.index_path, 'r') as f:
         index_dict = json.load(f)
         f.close()
     graph.train_mask = index_dict['train_index']
-
     graph.val_mask = index_dict['valid_index']
-
     print("train gnn, train_num: {}, valid_num: {}".format(len(graph.train_mask), len(graph.val_mask)))
 
     node_vision_dict = {}
@@ -151,12 +131,11 @@ def main():
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = Graph_Net().to(device)
     model.load_state_dict(torch.load(args.gnn_model)['state_dict'])
-
     graph.to(device)
 
     if args.test_all:
         print("---------------- valid-test-all result --------------------")
-        test(model, graph, graph.val_mask, device)
+        test(model, graph, graph.val_mask, device, args.gnn_model[:-20])
     else:
         print("---------------- valid-test1 result --------------------")
         if len(graph.test1_mask) > 0:

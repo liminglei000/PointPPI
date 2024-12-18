@@ -124,4 +124,11 @@ class Graph_Net(torch.nn.Module):
             x = torch.mul(x1, x2)
         x = self.fc2(x)
 
-        return x, x1, x2, node_id[0], node_id[1]
+        node_embedding = {}
+        for index in range(node_id.shape[1]):
+            p0 = node_id[0][index].cpu().item()
+            p1 = node_id[1][index].cpu().item()
+            if p0 not in node_embedding: node_embedding[p0] = x1[index]
+            if p1 not in node_embedding: node_embedding[p1] = x2[index]
+
+        return x, node_embedding
