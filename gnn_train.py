@@ -85,13 +85,13 @@ def train(model, graph, loss_fn, optimizer, device, result_file_path, save_path,
             if use_similarity:
                 similarity_origin = torch.tensor(protein_protein_similarity_val).to(device)
                 similarity_new = []
-                for pp in protein_protein_similarity_id:
+                for enum, pp in enumerate(protein_protein_similarity_id):
                     x1 = node_embedding.get(pp[0], None)
                     x2 = node_embedding.get(pp[1], None)
                     if x1 is not None and x2 is not None:
                         similarity_new.append(cal_similarity(x1, x2))
                     else:
-                        similarity_new.append(torch.tensor(0))
+                        similarity_new.append(similarity_origin[enum])
                 similarity_new = (torch.tensor(similarity_new).to(device) + 1) / 2
                 loss_mse = ((similarity_new - similarity_origin) ** 2).mean()
 
@@ -133,13 +133,13 @@ def train(model, graph, loss_fn, optimizer, device, result_file_path, save_path,
                 if use_similarity:
                     similarity_origin = torch.tensor(protein_protein_similarity_val).to(device)
                     similarity_new = []
-                    for pp in protein_protein_similarity_id:
+                    for enum, pp in enumerate(protein_protein_similarity_id):
                         x1 = node_embedding.get(pp[0], None)
                         x2 = node_embedding.get(pp[1], None)
                         if x1 is not None and x2 is not None:
                             similarity_new.append(cal_similarity(x1, x2))
                         else:
-                            similarity_new.append(torch.tensor(0))
+                            similarity_new.append(similarity_origin[enum])
                     similarity_new = (torch.tensor(similarity_new).to(device) + 1) / 2
                     loss_mse = ((similarity_new - similarity_origin) ** 2).mean()
 
