@@ -94,6 +94,7 @@ def train(model, graph, loss_fn, optimizer, device, result_file_path, save_path,
                         similarity_new.append(similarity_origin[enum])
                 similarity_new = (torch.tensor(similarity_new).to(device) + 1) / 2
                 loss_mse = ((similarity_new - similarity_origin) ** 2).mean()
+                # loss_mse = (((similarity_new - similarity_origin) ** 2) / similarity_origin).sum() / similarity_origin.sum()
 
                 loss = loss_fn(output, label) + alpha * loss_mse
             else:
@@ -142,6 +143,7 @@ def train(model, graph, loss_fn, optimizer, device, result_file_path, save_path,
                             similarity_new.append(similarity_origin[enum])
                     similarity_new = (torch.tensor(similarity_new).to(device) + 1) / 2
                     loss_mse = ((similarity_new - similarity_origin) ** 2).mean()
+                    # loss_mse = (((similarity_new - similarity_origin) ** 2) / similarity_origin).sum() / similarity_origin.sum()
 
                     loss = loss_fn(output, label) + alpha * loss_mse
                 else:

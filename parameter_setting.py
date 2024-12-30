@@ -42,3 +42,16 @@ for i in range(similarity_matrix.shape[0]):
         if similarity_matrix[i][j] > 0.5:
             protein_protein_similarity_id.append([j, i])
             protein_protein_similarity_val.append(similarity_matrix[i][j])
+
+# k neighbor
+# for i in range(similarity_matrix.shape[0]):
+#     for j in range(i+1, similarity_matrix.shape[0]):
+#         similarity_matrix[i][j] = similarity_matrix[j][i]
+# for i in range(similarity_matrix.shape[0]):
+#     similarity_row = similarity_matrix[i, np.arange(similarity_matrix.shape[0])!= i]
+#     sorted_indices = np.argsort(similarity_row)[::-1][:3]
+#     original_indices = np.arange(similarity_matrix.shape[0])[np.arange(similarity_matrix.shape[0])!= i]
+#     selected_indices = original_indices[sorted_indices]
+#     for index in selected_indices:
+#         protein_protein_similarity_id.append([i, index])
+#         protein_protein_similarity_val.append(similarity_matrix[i][index])

@@ -2,7 +2,7 @@ import os
 
 
 def run_func(ppi_path, pseq_path, vec_path, point_path, protein_max_length, index_path, gnn_model, test_all):
-    os.system("python gnn_test.py \
+    os.system("python test.py \
             --ppi_path={} \
             --pseq_path={} \
             --vec_path={} \
@@ -25,7 +25,8 @@ if __name__ == "__main__":
     test_all = "True"
     # test_all = "False"
 
-    gnn_model = "save_model/SHS27k_True1_" + split_mode + "_False/gnn_model_train.ckpt"
+    # gnn_model = "save_model/0ablation/SHS27k_False_" + split_mode + "_False/gnn_model_train.ckpt"
+    gnn_model = "save_model/1compare/SHS27k_True1_" + split_mode + "_False/gnn_model_train.ckpt"
 
     ppi_path = "dataset/" + task + "/protein.actions." + task + ".STRING.txt"
     pseq_path = "dataset/" + task + "/protein." + task + ".sequences.dictionary.tsv"
